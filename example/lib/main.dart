@@ -1,7 +1,8 @@
-import 'dart:io';
-import 'package:flutter/material.dart';
 import 'dart:async';
+
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
+import 'package:flutter/material.dart';
+import 'package:pdfx/pdfx.dart';
 
 void main() {
   runApp(const MyApp());
@@ -15,11 +16,15 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  List<String> _pictures = [];
+  String? _scannedPath;
+  late PdfController _pdfController;
 
   @override
   void initState() {
     super.initState();
+    _pdfController = PdfController(
+      document: PdfDocument.openAsset(''),
+    );
     initPlatformState();
   }
 
@@ -38,7 +43,23 @@ class _MyAppState extends State<MyApp> {
           children: [
             ElevatedButton(
                 onPressed: onPressed, child: const Text("Add Pictures")),
-            for (var picture in _pictures) Image.file(File(picture))
+            // for (var picture in _pictures) Image.file(File(picture))
+            Text(_scannedPath ?? ''),
+            if (_scannedPath != null && _scannedPath!.isNotEmpty) ...[
+              TextButton(
+                onPressed: () async {
+                  _pdfController
+                      .loadDocument(PdfDocument.openFile(_scannedPath!));
+                },
+                child: Text("Open"),
+              ),
+              SizedBox(
+                height: 200,
+                child: PdfView(
+                  controller: _pdfController,
+                ),
+              )
+            ]
           ],
         )),
       ),
@@ -46,12 +67,12 @@ class _MyAppState extends State<MyApp> {
   }
 
   void onPressed() async {
-    List<String> pictures;
     try {
-      pictures = await CunningDocumentScanner.getPictures() ?? [];
+      final p = await CunningDocumentScanner.getPictures();
+      print("RES $p");
       if (!mounted) return;
       setState(() {
-        _pictures = pictures;
+        _scannedPath = p;
       });
     } catch (exception) {
       // Handle exception here

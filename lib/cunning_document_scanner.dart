@@ -8,7 +8,7 @@ class CunningDocumentScanner {
       MethodChannel('cunning_document_scanner');
 
   /// Call this to start get Picture workflow.
-  static Future<List<String>?> getPictures(
+  static Future<String?> getPictures(
       {int noOfPages = 100, bool isGalleryImportAllowed = false}) async {
     Map<Permission, PermissionStatus> statuses = await [
       Permission.camera,
@@ -18,10 +18,10 @@ class CunningDocumentScanner {
       throw Exception("Permission not granted");
     }
 
-    final List<dynamic>? pictures = await _channel.invokeMethod('getPictures', {
+    final String? pdfPath = await _channel.invokeMethod('getPictures', {
       'noOfPages': noOfPages,
       'isGalleryImportAllowed': isGalleryImportAllowed
     });
-    return pictures?.map((e) => e as String).toList();
+    return pdfPath;
   }
 }

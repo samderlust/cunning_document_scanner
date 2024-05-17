@@ -21,7 +21,13 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.plugin.common.PluginRegistry
-
+import android.graphics.Bitmap
+import android.content.Context
+import android.graphics.BitmapFactory
+import android.graphics.pdf.PdfDocument
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
 
 /** CunningDocumentScannerPlugin */
 class CunningDocumentScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityAware {
@@ -77,6 +83,7 @@ class CunningDocumentScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityA
                 if (requestCode == START_DOCUMENT_ACTIVITY) {
                     when (resultCode) {
                         Activity.RESULT_OK -> {
+
                             // check for errors
                             val error = data?.extras?.getString("error")
                             if (error != null) {
@@ -91,8 +98,25 @@ class CunningDocumentScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityA
                                     it.imageUri.toString().removePrefix("file://")
                                 }?.toList()
                                 // trigger the success event handler with an array of cropped images
-                                pendingResult?.success(successResponse)
+                                // pendingResult?.success(successResponse)
+                                if (successResponse.isNullOrEmpty()) {
+                                    pendingResult?.error(
+                                        "ERROR",
+                                        "No cropped images returned",
+                                        null
+                                    )
+                                    return@ActivityResultListener false
+                                } else {
+
+                                    val pdfFile =
+                                        convertImagePathsToPdf(successResponse)
+                                    // pendingResult?.success(successResponse)
+                                    pendingResult?.success(pdfFile)
+                                }
+
+
                             }
+
                             handled = true
                         }
 
@@ -114,17 +138,25 @@ class CunningDocumentScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityA
                                 val croppedImageResults =
                                     data?.getStringArrayListExtra("croppedImageResults")?.toList()
                                         ?: let {
-                                            pendingResult?.error("ERROR", "No cropped images returned", null)
+                                            pendingResult?.error(
+                                                "ERROR",
+                                                "No cropped images returned",
+                                                null
+                                            )
                                             return@ActivityResultListener true
                                         }
 
                                 // return a list of file paths
                                 // removing file uri prefix as Flutter file will have problems with it
+                                print(croppedImageResults)
                                 val successResponse = croppedImageResults.map {
                                     it.removePrefix("file://")
                                 }.toList()
                                 // trigger the success event handler with an array of cropped images
-                                pendingResult?.success(successResponse)
+
+                                val pdfFile = convertImagePathsToPdf(successResponse)
+                                // pendingResult?.success(successResponse)
+                                pendingResult?.success(pdfFile)
                             }
                             handled = true
                         }
@@ -150,6 +182,58 @@ class CunningDocumentScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityA
         binding.addActivityResultListener(delegate!!)
     }
 
+
+    fun convertImagePathsToPdf(imagePaths: List<String>): String? {
+        // Create a PdfDocument instance
+        val pdfDocument = PdfDocument()
+
+        // Iterate through the list of image paths
+        for ((index, imagePath) in imagePaths.withIndex()) {
+            // Load the image from the file path
+            val image = BitmapFactory.decodeFile(imagePath)
+            if (image != null) {
+                // Create a page description with the same dimensions as the image
+                val pageInfo =
+                    PdfDocument.PageInfo.Builder(image.width, image.height, index + 1).create()
+
+                // Start a page
+                val page = pdfDocument.startPage(pageInfo)
+
+                // Draw the bitmap on the page's canvas
+                page.canvas.drawBitmap(image, 0f, 0f, null)
+
+                // Finish the page
+                pdfDocument.finishPage(page)
+
+                // Recycle the bitmap to free up memory
+                image.recycle()
+            } else {
+                // Handle the case where the image could not be loaded
+            }
+        }
+
+        val outputFileName = System.currentTimeMillis()
+
+        // Create a file in the application's cache directory
+        val file = File(this.activity.applicationContext.filesDir, "$outputFileName.pdf")
+
+        try {
+            // Write the document content to the file
+            FileOutputStream(file).use { outputStream ->
+                ;
+                pdfDocument.writeTo(outputStream)
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+            return null;
+        } finally {
+            // Close the document
+            pdfDocument.close()
+        }
+
+        // Return the file path
+        return file.absolutePath
+    }
 
     /**
      * create intent to launch document scanner and set custom options
@@ -178,6 +262,7 @@ class CunningDocumentScannerPlugin : FlutterPlugin, MethodCallHandler, ActivityA
             .build()
         val scanner = GmsDocumentScanning.getClient(options)
         scanner.getStartScanIntent(activity).addOnSuccessListener {
+
             try {
                 // Use a custom request code for onActivityResult identification
                 activity.startIntentSenderForResult(it, START_DOCUMENT_ACTIVITY, null, 0, 0, 0)

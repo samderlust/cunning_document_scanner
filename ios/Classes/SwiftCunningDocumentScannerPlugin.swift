@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import Vision
 import VisionKit
+import PDFKit
 
 @available(iOS 13.0, *)
 public class SwiftCunningDocumentScannerPlugin: NSObject, FlutterPlugin, VNDocumentCameraViewControllerDelegate {
@@ -40,14 +41,29 @@ public class SwiftCunningDocumentScannerPlugin: NSObject, FlutterPlugin, VNDocum
         let df = DateFormatter()
         df.dateFormat = "yyyyMMdd-HHmmss"
         let formattedDate = df.string(from: currentDateTime)
-        var filenames: [String] = []
+        // var filenames: [String] = []
+        // for i in 0 ... scan.pageCount - 1 {
+        //     let page = scan.imageOfPage(at: i)
+        //     let url = tempDirPath.appendingPathComponent(formattedDate + "-\(i).png")
+        //     try? page.pngData()?.write(to: url)
+        //     filenames.append(url.path)
+        // }
+        let pdfPath = tempDirPath.appendingPathComponent(formattedDate + ".pdf")
+
+        var images:  [UIImage] = []
+
         for i in 0 ... scan.pageCount - 1 {
             let page = scan.imageOfPage(at: i)
-            let url = tempDirPath.appendingPathComponent(formattedDate + "-\(i).png")
-            try? page.pngData()?.write(to: url)
-            filenames.append(url.path)
+            images.append(page) 
         }
-        resultChannel?(filenames)
+
+        let pdfDocument = makePDF(images)
+        print("Start pdfDocument.write")
+
+        try? pdfDocument?.write(to: pdfPath)
+        print("finish pdfDocument.write")
+
+        resultChannel?(pdfPath.path)
         presentingController?.dismiss(animated: true)
     }
 
@@ -59,5 +75,18 @@ public class SwiftCunningDocumentScannerPlugin: NSObject, FlutterPlugin, VNDocum
     public func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
         resultChannel?(nil)
         presentingController?.dismiss(animated: true)
+    }
+
+
+    private func makePDF(_ images: [UIImage]? = nil)-> PDFDocument? {
+        print("start makePDF")
+
+        let pdfDocument = PDFDocument()
+        for (index,image) in (images ?? []).enumerated() {
+            let pdfPage = PDFPage(image: image)
+            pdfDocument.insert(pdfPage!, at: index)
+        }
+        print("finish makePDF")
+        return pdfDocument
     }
 }
